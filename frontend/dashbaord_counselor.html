@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Counselor Dashboard — Tanglaw</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">Tanglaw — Counselor</div>
+    <div id="top-actions">
+      <span id="meInfo" class="muted"></span>
+      <button class="btn outline" id="logoutBtn">Logout</button>
+    </div>
+  </div>
+
+  <div class="container grid-2">
+    <aside class="card sidebar">
+      <h3>Students</h3>
+      <div id="studentsList" class="list muted">Loading...</div>
+
+      <hr>
+      <h4>Your Appointments</h4>
+      <div id="apptsList" class="list muted"></div>
+    </aside>
+
+    <main class="card main">
+      <h3 id="chatWith">Chat</h3>
+      <div id="chatWindow" class="chatWindow"></div>
+
+      <form id="msgForm" class="row">
+        <input id="msgInput" placeholder="Type a message..." autocomplete="off">
+        <button class="btn" type="submit">Send</button>
+      </form>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    const current = JSON.parse(localStorage.getItem('tanglaw_user') || 'null');
+    if (!current) location.href = 'login.html';
+    if (current.role !== 'counselor') {
+      alert('You are not a counselor. Redirecting to user dashboard.');
+      location.href = 'dashboard_user.html';
+    }
+    document.getElementById('meInfo').textContent = `Signed in as ${current.username} (${current.role})`;
+    document.getElementById('logoutBtn').addEventListener('click', ()=>{
+      localStorage.removeItem('tanglaw_user'); location.href='login.html';
+    });
+
+    const studentsList = document.getElementById('studentsList');
+    const apptsList = document.getElementById('apptsList');
+    let selected = null;
+
+    async function loadStudents(){
+      studentsList.innerHTML = 'Loading...';
+      try {
+        const res = await fetch(`${API_BASE}/users?exclude_id=${current.id}`);
+        const data = await res.json();
+        if (!res.ok) { studentsList.textContent = data.error || 'Failed'; return; }
+        const students = data.users.filter(u => u.role === 'user');
+        studentsList.innerHTML = '';
+        students.forEach(s=>{
+          const el = document.createElement('div');
+          el.className = 'list-item';
+          el.innerHTML = `<div><strong>${s.alias}</strong></div>
+                          <div class="row small"><button class="btn tiny" data-id="${s.id}">Chat</button></div>`;
+          studentsList.appendChild(el);
+        });
+        studentsList.querySelectorAll('button[data-id]').forEach(btn=>{
+          btn.addEventListener('click', async ()=>{
+            const id = parseInt(btn.getAttribute('data-id'));
+            const user = data.users.find(x=>x.id===id);
+            selectPerson(user);
+          });
+        });
+      } catch (err) { studentsList.textContent = 'Network error'; }
+    }
+
+    // load appointments for this counselor
+    async function loadAppointments(){
+      apptsList.innerHTML = 'Loading...';
+      try {
+        const res = await fetch(`${API_BASE}/appointments?counselor_id=${current.id}`);
+        const data = await res.json();
+        if (!res.ok) { apptsList.textContent = data.message || 'Failed'; return; }
+        if (!data.appointments.length) { apptsList.innerHTML = '<div class="muted">No appointments</div>'; return; }
+        apptsList.innerHTML = '';
+        data.appointments.forEach(a=>{
+          const node = document.createElement('div');
+          node.className = 'list-item small';
+          node.innerHTML = `<div><strong>${a.user_username}</strong> • ${a.date} ${a.time}</div>
+                            <div class="muted small">status: ${a.status}</div>
+                            <div class="row small">
+                              <button class="btn tiny approve" data-id="${a.id}">Approve</button>
+                              <button class="btn tiny outline cancel" data-id="${a.id}">Cancel</button>
+                            </div>`;
+          apptsList.appendChild(node);
+        });
+        apptsList.querySelectorAll('button.approve').forEach(b=>{
+          b.addEventListener('click', ()=>updateStatus(b.dataset.id, 'approved'));
+        });
+        apptsList.querySelectorAll('button.cancel').forEach(b=>{
+          b.addEventListener('click', ()=>updateStatus(b.dataset.id, 'cancelled'));
+        });
+      } catch (err) { apptsList.textContent = 'Network error'; }
+    }
+
+    async function updateStatus(id, status) {
+      try {
+        const res = await fetch(`${API_BASE}/appointments/${id}/status`, {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ status })
+        });
+        const j = await res.json();
+        if (!res.ok) { alert(j.message || j.error || 'Failed'); return; }
+        loadAppointments();
+      } catch (err) { alert('Network error'); }
+    }
+
+    // chat logic (same as user but reversed)
+    const chatWindow = document.getElementById('chatWindow');
+    function selectPerson(u){
+      selected = u;
+      document.getElementById('chatWith').textContent = `Chat with ${u.alias}`;
+      loadMessages();
+    }
+
+    async function loadMessages(){
+      if (!selected) {
+        chatWindow.innerHTML = '<div class="muted">Select a student to chat</div>'; return;
+      }
+      chatWindow.innerHTML = 'Loading...';
+      try {
+        const res = await fetch(`${API_BASE}/messages?from_id=${current.id}&to_id=${selected.id}`);
+        const data = await res.json();
+        if (!res.ok) { chatWindow.innerHTML = 'Failed to load messages'; return; }
+        chatWindow.innerHTML = '';
+        data.messages.forEach(m=>{
+          const me = (m.sender_id === current.id);
+          const b = document.createElement('div');
+          b.className = 'bubble ' + (me? 'me' : 'them');
+          b.innerHTML = `<div class="small muted">${me? 'You' : selected.alias} • ${m.timestamp}</div>
+                         <div>${m.content}</div>`;
+          chatWindow.appendChild(b);
+        });
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+      } catch (err) {
+        chatWindow.innerHTML = 'Network error';
+      }
+    }
+
+    document.getElementById('msgForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const txt = document.getElementById('msgInput').value.trim();
+      if (!txt || !selected) return;
+      try {
+        const res = await fetch(`${API_BASE}/messages`, {
+          method:'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            sender_id: current.id,
+            receiver_id: selected.id,
+            content: txt,
+            is_peer_support: 0
+          })
+        });
+        const j = await res.json();
+        if (!res.ok) { alert(j.message || j.error || 'Failed'); return; }
+        document.getElementById('msgInput').value = '';
+        loadMessages();
+      } catch (err) { alert('Network error'); }
+    });
+
+    // init
+    (async ()=>{
+      await loadStudents();
+      await loadAppointments();
+    })();
+  </script>
+</body>
+</html>

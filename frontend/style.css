@@ -1,0 +1,65 @@
+/* Simple clean CSS for Tanglaw UI (no frameworks) */
+:root{
+  --bg: #0f1724;
+  --card: #0b1220;
+  --accent: #6ea8fe;
+  --muted: #98a2b3;
+  --surface: #0c1624;
+  --text: #e6eef8;
+  --radius: 10px;
+  font-family: "Poppins", system-ui, Arial, sans-serif;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:linear-gradient(180deg,#071024 0%, #081223 60%);
+  color:var(--text);
+  min-height:100vh;
+  font-size:16px;
+  line-height:1.4;
+}
+
+/* center pages */
+.page-center{ display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px; }
+.card{ background:var(--card); padding:20px; border-radius:var(--radius); box-shadow:0 8px 30px rgba(3,8,15,0.6); width:420px; max-width:95%; }
+.card.narrow{ width:360px; }
+
+/* topbar */
+.topbar{ display:flex; justify-content:space-between; align-items:center; padding:12px 20px; background:rgba(0,0,0,0.2); }
+.brand{ font-weight:600; font-size:18px;}
+.container{ padding:20px; gap:20px; max-width:1200px; margin:20px auto; }
+.grid-2{ display:grid; grid-template-columns: 320px 1fr; gap:20px; align-items:start; }
+.sidebar{ padding:16px; }
+.main{ padding:16px; }
+
+/* elements */
+h1,h2,h3{ margin:0 0 8px 0; }
+.muted{ color:var(--muted); }
+.small{ font-size:13px; }
+.row{ display:flex; gap:10px; align-items:center; }
+.btn{ background:var(--accent); color:#022042; padding:8px 12px; border-radius:8px; border:0; cursor:pointer; font-weight:600; }
+.btn.outline{ background:transparent; color:var(--text); border:1px solid rgba(255,255,255,0.06); }
+.btn.tiny{ padding:4px 8px; font-size:13px;}
+.radio{ display:inline-flex; gap:6px; align-items:center; }
+
+/* lists */
+.list{ display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+.list-item{ background:rgba(255,255,255,0.02); padding:8px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; }
+
+/* chat */
+.chatWindow{ height:430px; overflow:auto; padding:12px; border-radius:8px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); margin-bottom:12px; }
+.bubble{ max-width:70%; margin-bottom:8px; padding:8px; border-radius:10px; }
+.bubble.me{ background:#07335a; margin-left:auto; text-align:right; }
+.bubble.them{ background:#10243a; margin-right:auto; text-align:left; }
+
+/* forms */
+label{ display:block; margin-top:8px; margin-bottom:6px; color:var(--muted); }
+input, select, textarea{ width:100%; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); background:transparent; color:var(--text); }
+input[type="date"], input[type="time"]{ padding:7px 10px; }
+
+/* responsive */
+@media (max-width:900px){
+  .grid-2{ grid-template-columns: 1fr; }
+  .chatWindow{ height:300px; }
+}

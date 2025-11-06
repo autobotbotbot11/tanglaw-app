@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Login — Tanglaw</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="page-center">
+  <div class="card narrow">
+    <h2>Log in</h2>
+    <form id="loginForm">
+      <label>Username</label>
+      <input id="username" name="username" required>
+
+      <label>Password</label>
+      <input id="password" name="password" type="password" required>
+
+      <div class="row">
+        <button class="btn" type="submit">Login</button>
+        <a class="btn outline" href="register.html">Register</a>
+      </div>
+    </form>
+
+    <div id="msg" class="muted small"></div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const u = document.getElementById('username').value.trim();
+      const p = document.getElementById('password').value.trim();
+      const msg = document.getElementById('msg');
+      msg.textContent = 'Logging in...';
+
+      try {
+        const res = await fetch(`${API_BASE}/login`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ username: u, password: p })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          msg.textContent = data.error || data.message || 'Login failed';
+          return;
+        }
+
+        // Save user to localStorage (simple session)
+        localStorage.setItem('tanglaw_user', JSON.stringify(data.user));
+
+        // Redirect based on role
+        if (data.user.role === 'counselor') location.href = 'dashboard_counselor.html';
+        else location.href = 'dashboard_user.html';
+      } catch (err) {
+        msg.textContent = 'Network error: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

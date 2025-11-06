@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Register — Tanglaw</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="page-center">
+  <div class="card narrow">
+    <h2>Create account</h2>
+    <label>Register as</label>
+    <div class="row">
+      <label class="radio">
+        <input type="radio" name="role" value="user" checked> Student (User)
+      </label>
+      <label class="radio">
+        <input type="radio" name="role" value="counselor"> Counselor
+      </label>
+    </div>
+
+    <form id="registerForm">
+      <label>Username</label>
+      <input id="username" name="username" required>
+
+      <label>Password</label>
+      <input id="password" name="password" type="password" required>
+
+      <div id="counselorCodeWrap" style="display:none;">
+        <label>Counselor Code</label>
+        <input id="counselorCode" name="code">
+      </div>
+
+      <div class="row">
+        <button type="submit" class="btn">Register</button>
+        <a class="btn outline" href="login.html">Go to Login</a>
+      </div>
+    </form>
+
+    <div id="msg" class="muted small"></div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    // Toggle counselor code input
+    document.querySelectorAll('input[name="role"]').forEach(r=>{
+      r.addEventListener('change', ()=>{
+        document.getElementById('counselorCodeWrap').style.display = (r.value === 'counselor' && r.checked) ? 'block' : 'none';
+      });
+    });
+
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const role = document.querySelector('input[name="role"]:checked').value;
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const code = document.getElementById('counselorCode').value.trim();
+
+      const msg = document.getElementById('msg');
+      msg.textContent = 'Please wait...';
+
+      try {
+        let url = `${API_BASE}/register_user`;
+        let body = { username, password };
+        if (role === 'counselor') {
+          url = `${API_BASE}/register_counselor`;
+          body.code = code;
+        }
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          msg.textContent = data.message || 'Registered successfully';
+          setTimeout(()=> location.href = 'login.html', 900);
+        } else {
+          msg.textContent = data.error || data.message || 'Registration failed';
+        }
+      } catch (err) {
+        msg.textContent = 'Network error: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>User Dashboard — Tanglaw</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">Tanglaw — User</div>
+    <div id="top-actions">
+      <span id="meInfo" class="muted"></span>
+      <button class="btn outline" id="logoutBtn">Logout</button>
+    </div>
+  </div>
+
+  <div class="container grid-2">
+    <aside class="card sidebar">
+      <h3>Available People</h3>
+      <div id="usersList" class="list muted">Loading...</div>
+
+      <hr>
+      <h4>Book Appointment</h4>
+      <form id="apptForm">
+        <label>Counselor</label>
+        <select id="counselorSelect"></select>
+
+        <label>Date</label>
+        <input type="date" id="apptDate" required>
+
+        <label>Time</label>
+        <input type="time" id="apptTime" required>
+
+        <div class="row">
+          <button class="btn" type="submit">Request</button>
+        </div>
+        <div id="apptMsg" class="muted small"></div>
+      </form>
+
+      <hr>
+      <h4>Your Appointments</h4>
+      <div id="myAppts" class="list muted"></div>
+    </aside>
+
+    <main class="card main">
+      <h3 id="chatWith">Chat</h3>
+      <div id="chatWindow" class="chatWindow"></div>
+
+      <form id="msgForm" class="row">
+        <input id="msgInput" placeholder="Type a message..." autocomplete="off">
+        <button class="btn" type="submit">Send</button>
+      </form>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    // --- initialization & state ---
+    const current = JSON.parse(localStorage.getItem('tanglaw_user') || 'null');
+    if (!current) location.href = 'login.html';
+    const myId = current.id;
+    document.getElementById('meInfo').textContent = `Signed in as ${current.username} (${current.role})`;
+
+    document.getElementById('logoutBtn').addEventListener('click', ()=>{
+      localStorage.removeItem('tanglaw_user');
+      location.href = 'login.html';
+    });
+
+    // UI elements
+    const usersList = document.getElementById('usersList');
+    const counselorSelect = document.getElementById('counselorSelect');
+    const myAppts = document.getElementById('myAppts');
+    const apptMsg = document.getElementById('apptMsg');
+
+    let selectedPerson = null; // { id, alias, role }
+
+    // load users
+    async function loadUsers(){
+      usersList.innerHTML = 'Loading...';
+      try {
+        const res = await fetch(`${API_BASE}/users?exclude_id=${myId}`);
+        const data = await res.json();
+        if (!res.ok) { usersList.textContent = data.error || 'Failed'; return; }
+        usersList.innerHTML = '';
+        counselorSelect.innerHTML = '<option value="">Choose counselor</option>';
+        data.users.forEach(u => {
+          const el = document.createElement('div');
+          el.className = 'list-item';
+          el.innerHTML = `<div><strong>${u.alias}</strong> <span class="muted">(${u.role})</span></div>
+                          <div class="row small">
+                            <button class="btn tiny" data-id="${u.id}">Chat</button>
+                          </div>`;
+          usersList.appendChild(el);
+
+          if (u.role === 'counselor') {
+            const opt = document.createElement('option');
+            opt.value = u.id;
+            opt.textContent = u.alias;
+            counselorSelect.appendChild(opt);
+          }
+        });
+
+        // attach chat buttons
+        usersList.querySelectorAll('button[data-id]').forEach(btn=>{
+          btn.addEventListener('click', ()=>{
+            const id = parseInt(btn.getAttribute('data-id'));
+            const user = data.users.find(x=>x.id===id);
+            selectPerson(user);
+          });
+        });
+
+      } catch (err) {
+        usersList.textContent = 'Network error';
+      }
+    }
+
+    // select person to chat
+    async function selectPerson(user){
+      selectedPerson = user;
+      document.getElementById('chatWith').textContent = `Chat with ${user.alias}`;
+      await loadMessages();
+    }
+
+    async function loadMessages(){
+      if (!selectedPerson) {
+        document.getElementById('chatWindow').innerHTML = '<div class="muted">Select someone to chat</div>';
+        return;
+      }
+      const cw = document.getElementById('chatWindow');
+      cw.innerHTML = 'Loading messages...';
+      try {
+        const res = await fetch(`${API_BASE}/messages?from_id=${myId}&to_id=${selectedPerson.id}`);
+        const data = await res.json();
+        if (!res.ok) { cw.innerHTML = 'Failed to load messages'; return; }
+        cw.innerHTML = '';
+        data.messages.forEach(m=>{
+          const me = (m.sender_id === myId);
+          const b = document.createElement('div');
+          b.className = 'bubble ' + (me? 'me' : 'them');
+          b.innerHTML = `<div class="small muted">${me? 'You' : selectedPerson.alias} • ${m.timestamp}</div>
+                         <div>${m.content}</div>`;
+          cw.appendChild(b);
+        });
+        cw.scrollTop = cw.scrollHeight;
+      } catch (err) {
+        cw.innerHTML = 'Network error';
+      }
+    }
+
+    // send message
+    document.getElementById('msgForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const txt = document.getElementById('msgInput').value.trim();
+      if (!txt || !selectedPerson) return;
+      // decide is_peer_support: true if chatting with user, false if with counselor
+      const isPeer = (selectedPerson.role !== 'counselor');
+      try {
+        const res = await fetch(`${API_BASE}/messages`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            sender_id: myId,
+            receiver_id: selectedPerson.id,
+            content: txt,
+            is_peer_support: isPeer ? 1 : 0
+          })
+        });
+        const j = await res.json();
+        if (!res.ok) {
+          alert(j.message || j.error || 'Failed to send');
+          return;
+        }
+        document.getElementById('msgInput').value = '';
+        await loadMessages();
+      } catch (err) {
+        alert('Network error: ' + err.message);
+      }
+    });
+
+    // appointments: load user's appointments
+    async function loadMyAppointments(){
+      myAppts.innerHTML = 'Loading...';
+      try {
+        const res = await fetch(`${API_BASE}/appointments?user_id=${myId}`);
+        const data = await res.json();
+        if (!res.ok) { myAppts.textContent = data.message || 'Failed'; return; }
+        if (!data.appointments.length) { myAppts.innerHTML = '<div class="muted">No appointments</div>'; return; }
+        myAppts.innerHTML = '';
+        data.appointments.forEach(a=>{
+          const node = document.createElement('div');
+          node.className = 'list-item small';
+          node.innerHTML = `<div><strong>${a.counselor_name}</strong> • ${a.date} ${a.time}</div>
+                            <div class="muted small">status: ${a.status}</div>`;
+          myAppts.appendChild(node);
+        });
+      } catch (err) {
+        myAppts.textContent = 'Network error';
+      }
+    }
+
+    // create appointment
+    document.getElementById('apptForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const counselor_id = counselorSelect.value;
+      const date = document.getElementById('apptDate').value;
+      const time = document.getElementById('apptTime').value;
+      apptMsg.textContent = 'Requesting...';
+      if (!counselor_id || !date || !time) { apptMsg.textContent = 'Fill all fields'; return; }
+      try {
+        const res = await fetch(`${API_BASE}/appointments`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            user_id: myId,
+            counselor_id: parseInt(counselor_id),
+            date,
+            time
+          })
+        });
+        const j = await res.json();
+        if (!res.ok) {
+          apptMsg.textContent = j.message || j.error || 'Failed';
+          return;
+        }
+        apptMsg.textContent = 'Requested — status pending';
+        await loadMyAppointments();
+      } catch (err) {
+        apptMsg.textContent = 'Network error';
+      }
+    });
+
+    // initial load
+    (async ()=>{
+      await loadUsers();
+      await loadMyAppointments();
+      // optionally select first counselor for quick chat
+    })();
+
+  </script>
+</body>
+</html>
